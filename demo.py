@@ -3,6 +3,7 @@ import cv2
 import mediapipe as mp
 from PIL import Image
 import numpy as np
+import os
 
 import torch
 from torchvision import transforms
@@ -26,6 +27,7 @@ def draw_bbox_axis(frame, face_pos):
 
 # Draw Russell's Circumplex Model
 def draw_russell(frame, valence, arousal, emotion):
+    # TODO : x,y 명칭을 반대로했는데 언젠가 수정하자
     x_shape, y_shape, _ = frame.shape
     base_xy = 150
     len_xy = 120
@@ -70,7 +72,7 @@ def draw_russell(frame, valence, arousal, emotion):
     return frame
 
 # Main
-def main(model_path, img_size, mtl=False):
+def main(model_path, img_size, mtl=False, save_video=False, save_path='demo.mp4'):
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -90,6 +92,14 @@ def main(model_path, img_size, mtl=False):
 
     face_detection = mp.solutions.face_detection.FaceDetection(min_detection_confidence=0.9)
     cap = cv2.VideoCapture(0)
+
+    # Save Video
+    if save_video:
+        width = round(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = round(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fourcc = cv2.VideoWriter_fourcc(*'DIVX')
+        print((int(height / (height+299) * width), height)) # TODO : 여기 계산식도 draw_russell처럼 y,x 바뀐 상황
+        out = cv2.VideoWriter(save_path, fourcc, 60, (int(height / (height+299) * width), height))
 
     while 1:
         ret, frame = cap.read()
@@ -134,8 +144,8 @@ def main(model_path, img_size, mtl=False):
 
             # Draw Image
             draw_bbox_axis(frame=frame, face_pos=(x, y, x2, y2))
-            frame = cv2.putText(frame, f'Emotion : {emotion}', (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255),
-                        2)
+            frame = cv2.putText(frame, f'Emotion : {emotion}', (x, y - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
             if mtl:
                 frame = cv2.putText(frame, f'Valence : {str(valence)}, Arousal : {str(arousal)}',
                                     (x, y2 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255),
@@ -147,8 +157,17 @@ def main(model_path, img_size, mtl=False):
 
             # Show Image
             cv2.imshow("", frame)
+            print(frame.shape)
+
+            # Save Video
+            if save_video:
+                out.write(frame)
 
         if cv2.waitKey(1) & 0xff == ord('q'):
+            cap.release()
+            if save_video:
+                out.release()
+            cv2.destroyAllWindows()
             break
 
 if __name__ == '__main__':
@@ -156,9 +175,15 @@ if __name__ == '__main__':
     img_size = 224
 
     # Model 2
-    model_path = 'models/enet_b0_8_va_mtl.pt'
+    model_path = os.path.join(os.getcwd().split('/src')[0], 'models/enet_b0_8_va_mtl.pt')
     mtl = True
+
+    # Save Video
+    save_video = 1
+    save_path = os.path.join(os.getcwd().split('/src')[0], 'demo.mp4')
 
     main(model_path = model_path,
          img_size = img_size,
-         mtl = mtl)
+         mtl = mtl,
+         save_video = save_video,
+         save_path = save_path)
