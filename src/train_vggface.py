@@ -6,6 +6,8 @@ import mediapipe as mp
 import torch
 import torch.nn as nn
 
+import timm
+
 from train.optimizer import RobustOptimizer
 import train.load_datasets as load_datasets
 from train.func_to_train import train, test
@@ -37,6 +39,8 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=str, default='cuda')
 
     parser.add_argument('--model', type=str, default='mobilenet_v2')
+
+    parser.add_argument('--prepare', type=bool, default=0, help='if already prepare cropped dataset, use 1 or True')
     args = parser.parse_args()
 
     use_cuda = torch.cuda.is_available()
@@ -51,9 +55,10 @@ if __name__ == '__main__':
     model_path = os.path.join(args.data_path, 'models')
 
     # prepare dataset
-    face_detection = mp.solutions.face_detection.FaceDetection(min_detection_confidence=args.face_threshold)
-    load_datasets.prepare_crop_face(train_data_path, crop_train_data_path)  # train
-    load_datasets.prepare_crop_face(valid_data_path, crop_valid_data_path)  # valid
+    if args.already_prepare_data == 0:
+        face_detection = mp.solutions.face_detection.FaceDetection(min_detection_confidence=args.face_threshold)
+        load_datasets.prepare_crop_face(train_data_path, crop_train_data_path)  # train
+        load_datasets.prepare_crop_face(valid_data_path, crop_valid_data_path)  # valid
 
     # load dataset
     train_dataset, test_dataset, train_loader, test_loader = \
@@ -65,6 +70,7 @@ if __name__ == '__main__':
                                    use_cuda=use_cuda)
     train_row_all = len(train_dataset)
     test_row_all = len(test_dataset)
+    num_classes = len(train_dataset.classes)
 
     # loss function setting
     criterion = nn.CrossEntropyLoss()
@@ -73,13 +79,13 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # model setting
+    # if use other model search timm.list_models()
     if args.model == 'mobilenet_v2':
-        from torchvision.models import mobilenet_v2
-        model = mobilenet_v2(pretrained=True)
+        model = timm.create_model('mobilenetv2_100', num_classes=num_classes, pretrained=True)
     elif args.model == 'efficientnet_b0':
-        model = 1
-    elif args.model == 'swin-T':
-        model = 1
+        model = timm.create_model('efficientnet_b0', num_classes=num_classes, pretrained=True)
+    elif args.model == 'swin_T':
+        model = timm.create_model('swin_tiny_patch4_window7_224', num_classes=num_classes, pretrained=True)
     else:
         raise ValueError
 
@@ -96,33 +102,12 @@ if __name__ == '__main__':
     print(f"val_loss : {epoch_val_loss:.4f} - val_acc: {epoch_val_accuracy:.4f}\n")
 
     # save model
-    torch.save(model, os.path.join(model_path, args.model + '_tr1.pt'))
+    torch.save(model, os.path.join(model_path, args.model + '_pretrained_vgg.pt'))
 
     # del head(classifier) & save model
-    model.head.fc=torch.nn.Identity()
-    torch.save(model.state_dict(), os.path.join(model_path, args.model + '_state_tr1.pt'))
-    torch.save(model, os.path.join(model_path, args.model + '_nohead_tr1.pt'))
-
-    """
-    from torchvision.models import resnet101,mobilenet_v2
-    import timm
-    #model=resnet101(pretrained=True)
-    #model=mobilenet_v2(pretrained=True)
-    #model=torch.hub.load('rwightman/gen-efficientnet-pytorch', 'efficientnet_b0', pretrained=True)
-    model=timm.create_model('rexnet_150', pretrained=True) #'vit_base_patch16_224' 'tf_efficientnet_b4_ns'
-    #model=timm.create_model('tf_efficientnet_b2_ns', pretrained=True,features_only=True)
-    print(model)
-    
-    #model.classifier=nn.Linear(in_features=1536, out_features=num_classes) #1792 #1536 #1280 #1408
-    model.head.fc=nn.Linear(in_features=1920, out_features=num_classes)
-    model=model.to(device)
-    print(model)
-    
-    if True:
-        img = torch.randn(1, 3, IMG_SIZE, IMG_SIZE).to(device)
-        model=model.to(device)
-        model.eval()
-        f=model.forward(img)
-        print(f.shape)
-        model.train()
-    """
+    if args.model == 'swin_T':
+        model.head = torch.nn.Identity()
+    else:
+        model.classifier = torch.nn.Identity()
+    torch.save(model.state_dict(), os.path.join(model_path, args.model + '_pretrained_vgg_state.pt'))
+    torch.save(model, os.path.join(model_path, args.model + '_pretrained_vgg_nohead.pt'))

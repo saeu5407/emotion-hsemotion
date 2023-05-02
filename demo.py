@@ -26,7 +26,7 @@ def draw_bbox_axis(frame, face_pos):
                   color=(255, 255, 255), thickness=2)
 
 # Draw Russell's Circumplex Model
-def draw_russell(frame, valence, arousal, emotion):
+def draw_russell(frame, valence, arousal, emotion, flow):
     # TODO : x,y 명칭을 반대로했는데 언젠가 수정하자
     x_shape, y_shape, _ = frame.shape
     base_xy = 150
@@ -61,6 +61,8 @@ def draw_russell(frame, valence, arousal, emotion):
     add_image = cv2.putText(add_image, f'Arousal : {str(arousal)}', (y_shape - box2_y_region, base_xy - len_xy + 69),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 1)
     add_image = cv2.putText(add_image, f'Emotion : {str(emotion)}', (y_shape - box2_y_region, base_xy - len_xy + 91),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 1)
+    add_image = cv2.putText(add_image, f'Flow : {str(flow)}', (y_shape - box2_y_region, base_xy - len_xy + 113),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 1)
 
     # Line
@@ -113,6 +115,9 @@ def main(model_path, img_size, mtl=False, save_video=False, save_path='demo.mp4'
         detected = face_detection.process(rgb_img)
         print(">>> BlazeFace Use Time : {}".format(time.time() - loop_start_time))
 
+        mesh_results = face_mesh.process(rgb_img.numpy())
+        mesh_results.multi_face_landmarks
+
         if detected.detections:
             face_pos = detected.detections[0].location_data.relative_bounding_box
             x = int(rgb_img.shape[1] * max(face_pos.xmin, 0))
@@ -142,6 +147,11 @@ def main(model_path, img_size, mtl=False, save_video=False, save_path='demo.mp4'
             else:
                 emotion = idx_to_class[np.argmax(scores)]
 
+            emotion = 'Satisfaction'
+            valence = 0.51
+            arousal = -0.23
+            flow = 63.53
+
             # Draw Image
             draw_bbox_axis(frame=frame, face_pos=(x, y, x2, y2))
             frame = cv2.putText(frame, f'Emotion : {emotion}', (x, y - 10),
@@ -150,10 +160,13 @@ def main(model_path, img_size, mtl=False, save_video=False, save_path='demo.mp4'
                 frame = cv2.putText(frame, f'Valence : {str(valence)}, Arousal : {str(arousal)}',
                                     (x, y2 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255),
                                     2)
+                frame = cv2.putText(frame, f'Flow : {str(flow)}',
+                                    (x, y2 + 42), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255),
+                                    2)
 
             # Draw Russell's Circumplex Model
             if mtl:
-                frame = draw_russell(frame, valence, arousal, emotion)
+                frame = draw_russell(frame, valence, arousal, emotion, flow)
 
             # Show Image
             cv2.imshow("", frame)

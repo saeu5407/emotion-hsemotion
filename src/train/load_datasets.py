@@ -2,13 +2,65 @@ import os
 import cv2
 import mediapipe as mp
 import glob
+import random
+import shutil
 import argparse
+
+from tqdm import tqdm
+
 import torch
 from torch.utils.data import DataLoader
 from torchvision import transforms, datasets
 
+# train test split(folder)
+def train_test_split(folder_path, split_train_test_valid=True, seed=1025, defalut_folder_name = 'default'):
+
+    # set seed, split_ratio
+    random.seed(seed)
+    classes = glob.glob(os.path.join(folder_path, defalut_folder_name, '*'))
+    if split_train_test_valid:
+        split_ratio = [0.6,  0.2,  0.2]
+    else:
+        split_ratio = [0.7, 0.3]
+
+    # make folder
+    if split_train_test_valid:
+        os.makedirs(os.path.join(folder_path, 'test'), exist_ok=True)
+    os.makedirs(os.path.join(folder_path, 'train'), exist_ok=True)
+    os.makedirs(os.path.join(folder_path, 'valid'), exist_ok=True)
+
+    # split & copy data
+    for idx in tqdm(classes):
+        idx_base = os.path.basename(idx)
+
+        if split_train_test_valid:
+            test_idx_path = os.path.join(folder_path, 'test', idx_base)
+            os.makedirs(os.path.join(folder_path, 'test', idx_base), exist_ok=True)
+        train_idx_path = os.path.join(folder_path, 'train', idx_base)
+        valid_idx_path = os.path.join(folder_path, 'valid', idx_base)
+        os.makedirs(os.path.join(folder_path, 'train', idx_base), exist_ok=True)
+        os.makedirs(os.path.join(folder_path, 'valid', idx_base), exist_ok=True)
+
+        idx_list = glob.glob(os.path.join(idx, '*'))
+        len_list = len(idx_list)
+        random.shuffle(idx_list)
+
+        train_list = idx_list[:int(len_list*split_ratio[0])]
+        if split_train_test_valid:
+            valid_list = idx_list[int(len_list*split_ratio[0]):int(len_list*(split_ratio[0]+split_ratio[1]))]
+            test_list = idx_list[int(len_list*(split_ratio[0]+split_ratio[1])):]
+            for copy_idx in test_list:
+                shutil.copy(copy_idx, os.path.join(test_idx_path, os.path.basename(copy_idx)))
+        else:
+            valid_list = idx_list[int(len_list*split_ratio[0]):]
+        for copy_idx in train_list:
+            shutil.copy(copy_idx, os.path.join(train_idx_path, os.path.basename(copy_idx)))
+        for copy_idx in valid_list:
+            shutil.copy(copy_idx, os.path.join(valid_idx_path, os.path.basename(copy_idx)))
+    print(">>> data split done")
+
 # cropped one image
-def crop_face_n_save(face_detection, image_path, save_path, target_size=(224, 224)):
+def crop_face_n_save(face_detection, image_path, save_idx_path, target_size=(224, 224)):
 
     # load, preproc
     frame = cv2.imread(image_path)
@@ -34,21 +86,29 @@ def crop_face_n_save(face_detection, image_path, save_path, target_size=(224, 22
         # output cropped face image
         frame = frame[y:y2, x:x2, :]
         frame = cv2.resize(frame, target_size)
-        cv2.imwrite(save_path + os.path.basename(image_path), frame)
+        cv2.imwrite(os.path.join(save_idx_path, os.path.basename(image_path)), frame)
         return 1
     return 0
 
 # crop face main
 def prepare_crop_face(data_path, save_path):
 
-    image_path_list = glob.glob(data_path + '/*' + 'png') + \
-                      glob.glob(data_path + '/*' + 'jpg') + \
-                      glob.glob(data_path + '/*' + 'jpeg')
+    folder_path_list = glob.glob(data_path + '/*')
     crop_cnt = 0
-    for image_path in image_path_list:
-        result = crop_face_n_save(face_detection, image_path, save_path, target_size=(224, 224))
-        crop_cnt += result
-    print(f"[{round(crop_cnt/len(image_path_list),2)}] total image length is {len(image_path_list)}, cropped {crop_cnt}")
+    image_cnt = 0
+    for folder_path in tqdm(folder_path_list):
+
+        image_path_list = glob.glob(folder_path + '/*' + 'png') + \
+                          glob.glob(folder_path + '/*' + 'jpg') + \
+                          glob.glob(folder_path + '/*' + 'jpeg')
+        image_cnt += len(image_path_list)
+        save_idx_path = os.path.join(save_path, os.path.basename(folder_path))
+        os.makedirs(save_idx_path, exist_ok=True)
+
+        for image_path in image_path_list:
+            result = crop_face_n_save(face_detection, image_path, save_idx_path, target_size=(224, 224))
+            crop_cnt += result
+    print(f"[{round(crop_cnt/image_cnt,2)}] total image length is {image_cnt}, cropped {crop_cnt}")
 
 # load dataset
 def set_datasets(train_data_path, valid_data_path, target_size=(224, 224), batch_size=48, num_workers=4, use_cuda=True):
@@ -89,7 +149,7 @@ if __name__ == '__main__':
     # parse
     parser = argparse.ArgumentParser(description='Datasets Parameter')
     parser.add_argument('--data_name', type=str, default='vggface2')
-    parser.add_argument('--data_path', type=str, default=os.getcwd().split(os.path.sep + 'src')[0] + 'datasets/')
+    parser.add_argument('--data_path', type=str, default=os.path.join(os.getcwd().split(os.path.sep + 'src')[0],'datasets/'))
     parser.add_argument('--face_threshold', type=float, default=0.9)
     parser.add_argument('--target_size', type=float, default=224)
     parser.add_argument('--batch_size', type=int, default=48)
@@ -99,15 +159,19 @@ if __name__ == '__main__':
 
     # dataset path
     default_data_path = os.path.join(args.data_path, args.data_name)
-    train_data_path = os.path.join(default_data_path, '')
-    valid_data_path = os.path.join(default_data_path, 'val')
+    train_data_path = os.path.join(default_data_path, 'train')
+    valid_data_path = os.path.join(default_data_path, 'valid')
     crop_train_data_path = os.path.join(default_data_path, 'train_crop')
-    crop_valid_data_path = os.path.join(default_data_path, 'val_crop')
+    crop_valid_data_path = os.path.join(default_data_path, 'valid_crop')
+
+    # split data
+    train_test_split(default_data_path, split_train_test_valid=True, seed=1025)
 
     # prepare dataset
+    # vggface_low datasets : [1.0] total image length is 101434, cropped 101373
     face_detection = mp.solutions.face_detection.FaceDetection(min_detection_confidence=args.face_threshold)
-    prepare_crop_face(train_data_path, crop_train_data_path) # train
-    prepare_crop_face(valid_data_path, crop_valid_data_path) # valid
+    prepare_crop_face(train_data_path, crop_train_data_path)  # train
+    prepare_crop_face(valid_data_path, crop_valid_data_path)  # valid
 
     # load dataset
     train_dataset, test_dataset, train_loader, test_loader = \
