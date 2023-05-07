@@ -38,9 +38,9 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--device', type=str, default='cuda')
 
-    parser.add_argument('--model', type=str, default='mobilenet_v2')
+    parser.add_argument('--model', type=str, default='swin_T')
 
-    parser.add_argument('--prepare', type=bool, default=0, help='if already prepare cropped dataset, use 1 or True')
+    parser.add_argument('--prepare', type=bool, default=1, help='if already prepare cropped dataset, use 1 or True')
     args = parser.parse_args()
 
     use_cuda = torch.cuda.is_available()
@@ -55,9 +55,9 @@ if __name__ == '__main__':
     model_path = os.path.join(args.data_path, 'models')
 
     # prepare dataset
-    if args.already_prepare_data == 0:
+    if args.prepare == 0:
         face_detection = mp.solutions.face_detection.FaceDetection(min_detection_confidence=args.face_threshold)
-        load_datasets.prepare_crop_face(train_data_path, crop_train_data_path)  # train
+        load_datasets.prepare_crop_face(train_data_path, crop_train_data_path)  # default
         load_datasets.prepare_crop_face(valid_data_path, crop_valid_data_path)  # valid
 
     # load dataset
@@ -89,7 +89,7 @@ if __name__ == '__main__':
     else:
         raise ValueError
 
-    # model train
+    # model default
     set_parameter_requires_grad(model, requires_grad=False)
     #set_parameter_requires_grad(model.classifier, requires_grad=True)
     set_parameter_requires_grad(model.head.fc, requires_grad=True)

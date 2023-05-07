@@ -12,7 +12,7 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision import transforms, datasets
 
-# train test split(folder)
+# default test split(folder)
 def train_test_split(folder_path, split_train_test_valid=True, seed=1025, defalut_folder_name = 'default'):
 
     # set seed, split_ratio
@@ -21,7 +21,7 @@ def train_test_split(folder_path, split_train_test_valid=True, seed=1025, defalu
     if split_train_test_valid:
         split_ratio = [0.6,  0.2,  0.2]
     else:
-        split_ratio = [0.7, 0.3]
+        split_ratio = [0.8, 0.2]
 
     # make folder
     if split_train_test_valid:
@@ -54,17 +54,17 @@ def train_test_split(folder_path, split_train_test_valid=True, seed=1025, defalu
         else:
             valid_list = idx_list[int(len_list*split_ratio[0]):]
         for copy_idx in train_list:
-            shutil.copy(copy_idx, os.path.join(train_idx_path, os.path.basename(copy_idx)))
+            shutil.move(copy_idx, os.path.join(train_idx_path, os.path.basename(copy_idx)))
         for copy_idx in valid_list:
-            shutil.copy(copy_idx, os.path.join(valid_idx_path, os.path.basename(copy_idx)))
+            shutil.move(copy_idx, os.path.join(valid_idx_path, os.path.basename(copy_idx)))
     print(">>> data split done")
 
 # cropped one image
 def crop_face_n_save(face_detection, image_path, save_idx_path, target_size=(224, 224)):
 
     # load, preproc
-    frame = cv2.imread(image_path)
-    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    frame_bgr = cv2.imread(image_path)
+    frame = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
 
     # detect face
     detected = face_detection.process(frame)
@@ -84,9 +84,9 @@ def crop_face_n_save(face_detection, image_path, save_idx_path, target_size=(224
         y = max(0, y - face_plus_scalar)
 
         # output cropped face image
-        frame = frame[y:y2, x:x2, :]
-        frame = cv2.resize(frame, target_size)
-        cv2.imwrite(os.path.join(save_idx_path, os.path.basename(image_path)), frame)
+        frame_bgr = frame[y:y2, x:x2, :]
+        # frame_bgr = cv2.resize(frame_bgr, target_size)
+        cv2.imwrite(os.path.join(save_idx_path, os.path.basename(image_path)), frame_bgr)
         return 1
     return 0
 
@@ -148,8 +148,9 @@ if __name__ == '__main__':
 
     # parse
     parser = argparse.ArgumentParser(description='Datasets Parameter')
-    parser.add_argument('--data_name', type=str, default='vggface2')
-    parser.add_argument('--data_path', type=str, default=os.path.join(os.getcwd().split(os.path.sep + 'src')[0],'datasets/'))
+    parser.add_argument('--data_name', type=str, default='data')
+    parser.add_argument('--data_path', type=str, default=os.path.join(os.getcwd().split(os.path.sep + 'src')[0], 'datasets', 'VGG-Face2'))
+    parser.add_argument('--data_path_folder', type=str, default='default')
     parser.add_argument('--face_threshold', type=float, default=0.9)
     parser.add_argument('--target_size', type=float, default=224)
     parser.add_argument('--batch_size', type=int, default=48)
@@ -165,7 +166,7 @@ if __name__ == '__main__':
     crop_valid_data_path = os.path.join(default_data_path, 'valid_crop')
 
     # split data
-    train_test_split(default_data_path, split_train_test_valid=True, seed=1025)
+    # train_test_split(default_data_path, split_train_test_valid=False, seed=1025, defalut_folder_name=args.data_path_folder)
 
     # prepare dataset
     # vggface_low datasets : [1.0] total image length is 101434, cropped 101373
