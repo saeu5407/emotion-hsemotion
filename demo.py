@@ -7,6 +7,7 @@ import os
 
 import torch
 from torchvision import transforms
+import onnxruntime
 
 idx_to_class = {0: 'Anger',
                 1: 'Contempt',
@@ -72,9 +73,7 @@ def draw_russell(frame, valence, arousal, emotion):
     return frame
 
 # Main
-def main(model_path, img_size, mtl=False, save_video=False, save_path='demo.mp4'):
-
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+def main(img_size, save_video=False, save_path='demo.mp4', model_path='hsemotion.onnx'):
 
     test_transforms = transforms.Compose(
         [
@@ -86,9 +85,8 @@ def main(model_path, img_size, mtl=False, save_video=False, save_path='demo.mp4'
     )
 
     # Load Models
-    model = torch.load(model_path, map_location=torch.device('cpu'))
-    model = model.to(device)
-    model.eval()
+    session = onnxruntime.InferenceSession(model_path)
+    input_name = session.get_inputs()[0].name
 
     face_detection = mp.solutions.face_detection.FaceDetection(min_detection_confidence=0.9)
     cap = cv2.VideoCapture(0)
@@ -98,7 +96,7 @@ def main(model_path, img_size, mtl=False, save_video=False, save_path='demo.mp4'
         width = round(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = round(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fourcc = cv2.VideoWriter_fourcc(*'DIVX')
-        print((int(height / (height+299) * width), height)) # TODO : 여기 계산식도 draw_russell처럼 y,x 바뀐 상황
+        # print((int(height / (height+299) * width), height)) # TODO : 여기 계산식도 draw_russell처럼 y,x 바뀐 상황이라 나중에 수정
         out = cv2.VideoWriter(save_path, fourcc, 60, (int(height / (height+299) * width), height))
 
     while 1:
@@ -111,7 +109,8 @@ def main(model_path, img_size, mtl=False, save_video=False, save_path='demo.mp4'
         rgb_img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         loop_start_time = time.time()
         detected = face_detection.process(rgb_img)
-        print(">>> BlazeFace Use Time : {}".format(time.time() - loop_start_time))
+        detect_time = time.time() - loop_start_time
+        start_time = time.time()
 
         if detected.detections:
             face_pos = detected.detections[0].location_data.relative_bounding_box
@@ -127,41 +126,36 @@ def main(model_path, img_size, mtl=False, save_video=False, save_path='demo.mp4'
             x = max(0, x - face_plus_scalar)
             y = max(0, y - face_plus_scalar)
 
-            # HSEmotion 적용
             face_img = frame[y:y2, x:x2, :]
             img_tensor = test_transforms(Image.fromarray(face_img))
             img_tensor.unsqueeze_(0)
-            scores = model(img_tensor.to(device))
-            scores = scores[0].data.cpu().numpy()
-            if mtl:
-                emotion = idx_to_class[np.argmax(scores[0:8])]
-                valence = round(scores[8], 2)
-                arousal = round(scores[9], 2)
-                print(valence)
-                print(arousal)
-            else:
-                emotion = idx_to_class[np.argmax(scores)]
+
+            img_tensor = img_tensor.numpy().astype(np.float32)
+            output_names = [output.name for output in session.get_outputs()]
+            outputs = session.run(output_names, {input_name: img_tensor})
+
+            emotion = idx_to_class[np.argmax(outputs[1])]
+            valence = round(outputs[2][0], 2)
+            arousal = round(outputs[3][0], 2)
 
             # Draw Image
             draw_bbox_axis(frame=frame, face_pos=(x, y, x2, y2))
             frame = cv2.putText(frame, f'Emotion : {emotion}', (x, y - 10),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
-            if mtl:
-                frame = cv2.putText(frame, f'Valence : {str(valence)}, Arousal : {str(arousal)}',
-                                    (x, y2 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255),
-                                    2)
-
-            # Draw Russell's Circumplex Model
-            if mtl:
-                frame = draw_russell(frame, valence, arousal, emotion)
+            frame = cv2.putText(frame, f'Valence : {str(valence)}, Arousal : {str(arousal)}',
+                                (x, y2 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255),
+                                2)
+            frame = draw_russell(frame, valence, arousal, emotion)
 
             # Show Image
-            cv2.imshow("", frame)
-            print(frame.shape)
+            cv2.imshow("Demo", frame)
 
             # Save Video
             if save_video:
                 out.write(frame)
+
+
+        print(">>> Use Time : Detect {}, Predict {}".format(round(detect_time,2), round(time.time() - start_time, 2)))
 
         if cv2.waitKey(1) & 0xff == ord('q'):
             cap.release()
@@ -174,16 +168,12 @@ if __name__ == '__main__':
 
     img_size = 224
 
-    # Model 2
-    model_path = os.path.join(os.getcwd().split('/src')[0], 'models/enet_b0_8_va_mtl.pt')
-    mtl = True
-
-    # Save Video
+    # Save Video Options
     save_video = 1
     save_path = os.path.join(os.getcwd().split('/src')[0], 'demo.mp4')
 
-    main(model_path = model_path,
-         img_size = img_size,
-         mtl = mtl,
-         save_video = save_video,
-         save_path = save_path)
+    main(img_size,
+         save_video=False,
+         save_path='demo.mp4',
+         model_path=os.path.join(os.getcwd().split('/src')[0], 'hsemotion.onnx')
+         )

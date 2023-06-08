@@ -39,7 +39,6 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=str, default='cuda')
 
     parser.add_argument('--model', type=str, default='swin_T')
-
     parser.add_argument('--prepare', type=bool, default=1, help='if already prepare cropped dataset, use 1 or True')
     args = parser.parse_args()
 
@@ -91,8 +90,10 @@ if __name__ == '__main__':
 
     # model default
     set_parameter_requires_grad(model, requires_grad=False)
-    #set_parameter_requires_grad(model.classifier, requires_grad=True)
-    set_parameter_requires_grad(model.head.fc, requires_grad=True)
+    if args.model == 'swin_T':
+        set_parameter_requires_grad(model.head.fc, requires_grad=True)
+    else:
+        set_parameter_requires_grad(model.classifier, requires_grad=True)
     train(model, device, train_loader, test_loader, criterion, train_row_all, test_row_all, n_epochs=1, learningrate=0.001, robust=False)
     set_parameter_requires_grad(model, requires_grad=True)
     train(model, device, train_loader, test_loader, criterion, train_row_all, test_row_all, n_epochs=10, learningrate=1e-4, robust=False)
@@ -111,3 +112,5 @@ if __name__ == '__main__':
         model.classifier = torch.nn.Identity()
     torch.save(model.state_dict(), os.path.join(model_path, args.model + '_pretrained_vgg_state.pt'))
     torch.save(model, os.path.join(model_path, args.model + '_pretrained_vgg_nohead.pt'))
+
+    print("Done.")
