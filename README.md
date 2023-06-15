@@ -18,12 +18,12 @@ Input Image Shape(Face Croped) : 224, 224<br>
 Output : embedding vector, emotion(8 category), valence, arousal<br>
 
 ## Demo
-<img width="80%" src="https://github.com/saeu5407/emotion-hsemotion/blob/main/demo.gif"/>
+<img width="80%" src="https://github.com/saeu5407/hsemotion-onnx/blob/main/demo.gif"/>
 <br>
 
 ```
 # Run
-python3 ./src/HSEmotion.py
+python3 demo.py
 ```
 
 ## Research papers
