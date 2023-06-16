@@ -1,14 +1,16 @@
 # hsemotion-onnx
 
-AffectNet SOTA 모델인 Effectnet 기반 멀티 태스크 러닝 모델(Hsemotion) 데모 및 ONNX 구현<br>
+AffectNet SOTA 모델인 Effectnet 기반 멀티 태스크 러닝 모델(Hsemotion) 데모 및 ONNX 구현<br><br>
 악간의 변경점이 있습니다. Output을 4가지로 변형하였습니다.<br><br>
-`enet_b0_8_va_mtl.pt`를 기반으로 4가지 output을 출력하는 ONNX모델 생성 완료<br>
-- embedding vector : (1, 1280)
+두 가지 버전의 임베딩 벡터가 다릅니다. hsemotion_1280.onnx의 경우 최종 임베딩 벡터에 GAP를 적용하여 출력하는 버젼이고,<br>
+`hsemotion_1280_7_7.onnx`의 경우 GAP 적용 전의 피쳐맵을 출력합니다.<br>
+- embedding vector : (1, 1280) or (1, 1280, 7, 7)
 - expression(emotion) : (1, 8)
 - valence : (1, )
 - arousal : (1, )
 
 hsemotion link : https://github.com/HSE-asavchenko/face-emotion-recognition
+<br>
 
 ## Type
 
