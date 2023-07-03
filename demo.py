@@ -127,13 +127,20 @@ def main(img_size, save_video=False, save_path='demo.mp4', model_path='hsemotion
             y = max(0, y - face_plus_scalar)
 
             face_img = frame[y:y2, x:x2, :]
-            img_tensor = test_transforms(Image.fromarray(face_img))
-            img_tensor.unsqueeze_(0)
+            face_img = cv2.resize(face_img, (224, 224))
+            face_img = face_img.astype(np.float32)
+            face_img /= 255
+            face_img[:,:,0] = (face_img[:,:,0] - 0.485) / 0.229
+            face_img[:,:,1] = (face_img[:,:,1] - 0.456) / 0.224
+            face_img[:,:,2] = (face_img[:,:,2] - 0.406) / 0.225
+            img_tensor = face_img.transpose(2, 0, 1)
+            img_tensor = img_tensor[np.newaxis,...]
 
-            img_tensor = img_tensor.numpy().astype(np.float32)
+            # img_tensor = img_tensor.numpy().astype(np.float32)
             output_names = [output.name for output in session.get_outputs()]
             outputs = session.run(output_names, {input_name: img_tensor})
 
+            print(outputs[1])
             emotion = idx_to_class[np.argmax(outputs[1])]
             valence = round(outputs[2][0], 2)
             arousal = round(outputs[3][0], 2)
@@ -175,5 +182,5 @@ if __name__ == '__main__':
     main(img_size,
          save_video=False,
          save_path='demo.mp4',
-         model_path=os.path.join(os.getcwd().split('/src')[0], 'hsemotion.onnx')
+         model_path=os.path.join(os.getcwd().split('/src')[0], 'hsemotion_1280.onnx')
          )

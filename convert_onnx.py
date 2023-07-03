@@ -2,11 +2,12 @@ import os
 import onnxruntime
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 from thop import profile
 from torchvision import transforms
 
-if not os.path.isfile("hsemotion.onnx"):
+if not os.path.isfile("hsemotion1.onnx"):
 
     model_path = os.path.join(os.getcwd().split('/src')[0], 'models/enet_b0_8_va_mtl.pt')
     net = torch.load(model_path, map_location=torch.device('cpu')) # timm==0.6.5
@@ -23,9 +24,10 @@ if not os.path.isfile("hsemotion.onnx"):
 
         def forward(self, x):
             embed = self.backbone(x) # 1, 1280, 7, 7 | 0.7초 소요
-            embed = self.globalselectpool(embed) # 1, 1280 | 0.45초 소요
-            x = self.classifier(embed)
-            return {'embedding': embed, 'expression': x[:, :8], 'valence': x[:, -2], 'arousal': x[:, -1]}
+            x = self.globalselectpool(embed) # 1, 1280 | 0.45초 소요
+            x = self.classifier(x)
+            exp = F.softmax(x[:, :8], dim=1)
+            return {'embedding': embed, 'exp': exp, 'valence': x[:, -2], 'arousal': x[:, -1]}
 
     model = HSEMotion(net)
 
@@ -56,7 +58,8 @@ session = onnxruntime.InferenceSession(onnx_model_path)
 
 # 입력 텐서 생성
 input_name = session.get_inputs()[0].name
-input_data = np.zeros((1, 3, 224, 224))
+input_data = np.ones((1, 3, 224, 224))
+
 input_data = input_data.astype(np.float32)
 
 # 예측 수행
