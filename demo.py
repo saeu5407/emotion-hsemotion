@@ -127,6 +127,7 @@ def main(img_size, save_video=False, save_path='demo.mp4', model_path='hsemotion
             y = max(0, y - face_plus_scalar)
 
             face_img = frame[y:y2, x:x2, :]
+            # 자른 얼굴을 넣음
             face_img = cv2.resize(face_img, (224, 224))
             face_img = face_img.astype(np.float32)
             face_img /= 255
